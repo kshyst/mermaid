@@ -3,19 +3,14 @@ services:
     build: .
     ports:
       - "3010:80"
-    restart: unless-stopped
+    restart: always
     depends_on:
       diagrams-api:
         condition: service_healthy
-    secrets:
-      - nginx_htpasswd
   diagrams-api:
     build:
       context: .
       dockerfile: Dockerfile.api
-    restart: unless-stopped
+    restart: always
     volumes:
       - ./data:/data
-secrets:
-  nginx_htpasswd:
-    file: ./.nginx-auth/htpasswd

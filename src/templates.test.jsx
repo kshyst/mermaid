@@ -35,7 +35,8 @@ describe('Complete template catalog', () => {
 
 describe('Template insertion and autosave over HTTP', () => {
   let host, root, saved, serverDocs;
-  const existing = { id: '11111111-1111-4111-8111-111111111111', name: 'Existing diagram', code: 'flowchart TD\n A-->B', updated: 1, version: 1 };
+  const user={id:'22222222-2222-4222-8222-222222222222',username:'meow',legacy:true};
+  const existing = { id: '11111111-1111-4111-8111-111111111111', name: 'Existing diagram', creatorId:user.id,creatorName:user.username,canManage:true,groupId:null, code: 'flowchart TD\n A-->B', updated: 1, version: 1 };
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     vi.useFakeTimers();
@@ -60,7 +61,7 @@ describe('Template insertion and autosave over HTTP', () => {
     await act(async () => button.click());
   }
   it('opens complete source, preserves the existing document, and persists the new UUID', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     await click('Explore templates');
     await click('Use Checkout and payment template');
     const template = templates.find(template => template.name === 'Checkout and payment');
@@ -75,7 +76,7 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(host.textContent).toContain('All changes saved');
   });
   it('keeps template search separate from the sidebar search', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     const search = host.querySelector('[aria-label="Search diagrams"]');
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(search, 'Existing');
@@ -94,7 +95,7 @@ describe('Template insertion and autosave over HTTP', () => {
   });
   it('offers templates when the database library is empty', async () => {
     serverDocs = [];
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     await click('Explore templates');
     await click('Use Commerce database template');
     expect(host.querySelector('[aria-label="Test source"]').value).toContain('PURCHASE_ORDER');
@@ -102,7 +103,7 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(saved).toHaveLength(1);
   });
   it('filters by diagram type and opens the matching example', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     await click('Explore templates');
     const filter = host.querySelector('[aria-label="Filter template type"]');
     await act(async () => { filter.value = 'Quadrant'; filter.dispatchEvent(new Event('change', { bubbles: true })); });
@@ -111,7 +112,7 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(host.querySelector('[aria-label="Test source"]').value).toContain('quadrantChart');
   });
   it('keeps the dialog open and shows an error if creation fails', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     await click('Explore templates');
     vi.stubGlobal('crypto', {});
     await click('Use Checkout and payment template');
@@ -120,7 +121,7 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(saved).toHaveLength(0);
   });
   it('keeps templates usable after deactivating the last document', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     await click('Document actions');
     await click('Delete diagram');
     await click('Delete diagram');
@@ -130,11 +131,11 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(host.querySelector('[aria-label="Test source"]').value).toContain('Monitoring alert');
   });
   it('offers all diagram themes and defaults PNG background to the chosen palette', async () => {
-    await act(async () => root.render(<App/>));
+    await act(async () => root.render(<App user={user} onLogout={async()=>{}}/>));
     const picker = host.querySelector('[aria-label="Diagram theme"]');
     expect(picker.options).toHaveLength(12);
     await act(async () => { picker.value = 'midnight'; picker.dispatchEvent(new Event('change', { bubbles: true })); });
-    expect(JSON.parse(localStorage.getItem('kshyst-mermaid-drafts-v1')).theme).toBe('midnight');
+    expect(JSON.parse(localStorage.getItem('kshyst-mermaid-drafts-v2:'+user.id)).theme).toBe('midnight');
     await click('Export');
     const png = Array.from(host.querySelectorAll('.export-options button')).find(button => button.textContent.includes('PNG'));
     await act(async () => png.click());

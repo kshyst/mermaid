@@ -16,7 +16,13 @@ docker compose up -d --build
 
 Open **http://localhost:3010**. The container restarts automatically and has an HTTP health check.
 
-Nginx Basic Authentication protects the app and its assets. Docker Compose mounts password hashes from `.nginx-auth/htpasswd` as a secret; this directory is excluded from Git and Docker builds. Keep this file when redeploying. `/healthz` is an unauthenticated health endpoint containing only `ok`. Use HTTPS when accessing the app over an untrusted network.
+Registration and login use individual accounts. Each account sees its own diagrams and diagrams shared with its groups. Group owners can create/rename groups and add or remove registered users by username. Members can view/edit group diagrams and leave groups; diagram creators control group assignment and deactivation.
+
+Authentication uses a single JWT access token valid for exactly 24 hours, stored in an HttpOnly, SameSite=Lax cookie. There are no refresh tokens. Logout revokes the session. Cookies become Secure behind HTTPS; configure TLS for public use because HTTP sends credentials and tokens without transport encryption. Nginx no longer uses Basic Authentication or trusted username headers.
+
+The signing key is generated at `data/jwt-secret` and persisted across container restarts. Sessions and password hashes are stored in SQLite. Passwords use salted PBKDF2-SHA256 with 600000 iterations. Authentication attempts are limited per client IP. Keep the entire data directory private and back it up; it is excluded from Git and Docker image builds.
+
+For migration of existing shared-auth records, `data/bootstrap-users.json` contains a list of `{ "username": "meow", "password_hash": "..." }` entries generated with `server/auth.py`. Bootstrap hashes create the legacy account before registration is exposed. The deployed meow account retains its previous password and owns its original diagrams. Unrecognized legacy owners get locked placeholders to prevent account takeover. A fresh installation without legacy data does not need this file; users can register normally.
 
 ```sh
 docker compose down
@@ -30,13 +36,13 @@ npm ci
 npm run dev
 ```
 
-In a separate terminal, run `DATABASE_PATH=./data/diagrams.sqlite3 python3 server/main.py` for the development API. Vite proxies API requests as the development user `meow`; Docker uses the authenticated Nginx user.
+Install Python dependencies with `pip install -r server/requirements.txt`, then run `DATABASE_PATH=./data/diagrams.sqlite3 python3 server/main.py` for the development API. Vite proxies API requests with the same JWT cookie authentication as Docker.
 
 ## Storage and sharing
 
-Documents autosave to **`data/diagrams.sqlite3`** on the Docker host. The directory is mounted into the private API container and survives container rebuilds and restarts. Preferences and pending unsaved drafts stay in browser storage. Existing browser documents migrate into SQLite on the first reload, without overwriting existing records or reactivating inactive IDs.
+Documents autosave to **`data/diagrams.sqlite3`** on the Docker host. The directory is mounted into the private API container and survives container rebuilds and restarts. Preferences and pending unsaved drafts stay in browser storage scoped by account ID. Legacy browser documents migrate only for the legacy meow account, without overwriting existing records or reactivating inactive IDs. Other accounts never import that shared browser cache.
 
-Delete deactivates a document (`is_active=0`) and records its deactivation time. The library shows active documents only; names and sources remain in SQLite. SQL triggers block physical `DELETE`, replacement of existing rows (including `INSERT OR REPLACE`), identity/owner changes, and edits to inactive content. Updates use version checks to protect edits from other sessions. As with any SQLite file, someone with administrative access can alter its schema or remove the file; keep database backups.
+Delete deactivates a document (`is_active=0`) and records its deactivation time. The library shows active documents only; names and sources remain in SQLite. SQL triggers block physical `DELETE`, replacement of existing rows (including `INSERT OR REPLACE`), identity/owner/creator changes, and edits to inactive content. Every diagram has a creator foreign key and an optional group foreign key; access is checked on every request. Updates use version checks to protect edits from other sessions. As with any SQLite file, someone with administrative access can alter its schema or remove the file; keep database backups.
 
 For a consistent live backup, use SQLite's backup API rather than copying the database alone while WAL writes are active:
 
