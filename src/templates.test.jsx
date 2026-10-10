@@ -119,4 +119,14 @@ describe('Template insertion and autosave over HTTP', () => {
     expect(host.querySelector('[role="status"]').textContent).toContain('cannot generate diagram IDs');
     expect(saved).toHaveLength(0);
   });
+  it('keeps templates usable after deactivating the last document', async () => {
+    await act(async () => root.render(<App/>));
+    await click('Document actions');
+    await click('Delete diagram');
+    await click('Delete diagram');
+    expect(host.querySelector('.library-empty')).not.toBeNull();
+    await click('Explore templates');
+    await click('Use Incident response template');
+    expect(host.querySelector('[aria-label="Test source"]').value).toContain('Monitoring alert');
+  });
 });

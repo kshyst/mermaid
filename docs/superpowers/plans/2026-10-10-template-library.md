@@ -12,4 +12,6 @@
 - [x] Add regression checks for HTTP creation/save, filter isolation and all Mermaid template syntax.
 - [x] Build, commit and push; deploy the frontend image to the existing server without altering its database or authentication.
 
-Validation: 37 automated checks passed, including all thirty Mermaid parsers and template selection/autosave in a simulated DOM without randomUUID. Production frontend image 07c91b8533b9 was loaded on the existing server; public authenticated HTML/assets/API returned 200, anonymous access returned 401, and restart policy remains always. No native browser provider was available for a manual browser check.
+Validation: 38 automated checks passed, including all thirty Mermaid parsers and template selection/autosave in a simulated DOM without randomUUID. The production frontend image was loaded on the existing server; public authenticated HTML/assets/API returned 200, anonymous access returned 401, and restart policy remains always. No native browser provider was available for a manual browser check.
+
+The empty-library regression also covers deactivating the last document and then creating another from a template.
