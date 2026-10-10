@@ -1,0 +1,93 @@
+.shape-picker {
+  flex-shrink: 0;
+  border-top: 1px solid #303139;
+  background: #18191d;
+}
+.shape-picker-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  color: var(--accent-light);
+  font-size: 11px;
+  text-align: left;
+}
+.shape-picker-heading > span { display: flex; align-items: center; gap: 7px; }
+.shape-picker-heading small {
+  padding: 1px 5px;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  color: var(--accent-muted);
+  font-size: 9px;
+}
+.shape-picker-body { padding: 0 12px 12px; }
+.shape-picker-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+.shape-picker-tools > span { font-size: 9px; color: #7d7a89; }
+.shape-search {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #302d38;
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--accent-muted);
+  background: #131417;
+}
+.shape-search input {
+  width: 92px;
+  border: 0;
+  background: none;
+  color: #c0d1d5;
+  font-size: 10px;
+}
+.shape-search:focus-within { border-color: var(--accent); }
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 6px;
+  max-height: 166px;
+  overflow-y: auto;
+  padding: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-border) transparent;
+}
+.shape-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 64px;
+  padding: 7px 4px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: #17252a;
+  color: var(--accent-light);
+}
+.shape-option > span { color: #a5b8bd; font-size: 9px; line-height: 1.3; }
+.shape-option:hover:not(:disabled) { background: #1c3b43; border-color: var(--accent); color: var(--accent-light); }
+.shape-option:hover:not(:disabled) > span { color: var(--accent-light); }
+.shape-option:active:not(:disabled) { background: #21505a; }
+.shape-option:disabled { opacity: .35; }
+.shape-empty { grid-column: 1 / -1; margin: 7px; font-size: 11px; color: #85808f; }
+@media (max-height: 650px) {
+  .shape-grid { max-height: 94px; }
+  .shape-option { min-height: 57px; }
+}
+@media (max-width: 800px) {
+  .shape-picker { max-height: 45%; overflow-y: auto; }
+  .shape-picker-heading { padding: 7px 12px; }
+  .shape-picker-body { padding-bottom: 6px; }
+  .shape-picker-tools { margin-bottom: 4px; }
+  .shape-grid { max-height: 82px; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); }
+  .shape-option { min-height: 54px; padding: 4px; gap: 3px; }
+  .shape-option svg { height: 24px; }
+}
