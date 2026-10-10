@@ -9,8 +9,10 @@
 - [x] Add auth/group APIs and remove trusted identity headers and Nginx Basic Auth.
 - [x] Add account UI, per-user drafts, group management, filters and diagram assignment.
 - [x] Verify auth/ACL/migration/retention and frontend regressions.
-- [ ] Back up data, build locally, push and deploy both services with persistent state.
+- [x] Back up data, build locally, push and deploy both services with persistent state.
 
 Validation: 18 backend and 62 frontend tests passed, covering JWT claims/lifetime/expiry/logout, password hashing, legacy migration, foreign creator protection, private/group access and membership revocation, SQL deletion blocking, registration/sign-in/sign-out, account cache isolation and group management UI. UI checks use a simulated DOM. Pre-migration backups were prepared for local and remote databases.
 
 Group access refresh also preserves unsaved work in a separate private draft after membership removal, while hiding the revoked original.
+
+Deployment: both services were updated locally and remotely. Live HTTP checks confirmed the public account page, anonymous API denial, removal of trusted-header access, meow login with the existing password, exactly 86400-second JWT lifetime, HttpOnly/SameSite cookie and revoked-token rejection after logout. SQL inspection confirmed all ten remote diagrams and original metadata match the final pre-migration backup, with non-null creator links, valid foreign keys and retention triggers. Both services keep restart=always.
