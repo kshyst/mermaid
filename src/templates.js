@@ -1,3 +1,4 @@
+import { extendedTemplates } from './templates-extended';
 export const templates = [
   { name: 'Product launch', type: 'Flowchart', description: 'From a spark of an idea to something real.', code: `flowchart TD
     A([A new idea]) --> B[Research & discovery]
@@ -44,6 +45,13 @@ export const templates = [
         int id PK
         string source
         datetime updated_at
+    }
+    COMMENT {
+        int id PK
+        int user_id FK
+        int diagram_id FK
+        string body
+        datetime created_at
     }` },
   { name: 'Release roadmap', type: 'Gantt', description: 'Bring milestones and timelines together.', code: `gantt
     title Release roadmap
@@ -122,5 +130,6 @@ export const templates = [
       Export a diagram: 4: Customer
     section Return
       Share with team: 5: Customer, Team` },
+  ...extendedTemplates,
 ];
 export const blankCode = 'flowchart TD\n    A[Start here] --> B[Your next idea]\n';

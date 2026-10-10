@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { blankCode } from './templates';
+import { createDiagramId } from './id';
 
 const LEGACY_KEY = 'mermaid-studio-v1';
 const DRAFT_KEY = 'kshyst-mermaid-drafts-v1';
 const MIGRATION_KEY = 'kshyst-mermaid-sqlite-migrated-v1';
-const makeDoc = (name, code) => ({ id: crypto.randomUUID(), name, code, updated: Date.now() });
+const makeDoc = (name, code) => ({ id: createDiagramId(), name, code, updated: Date.now() });
 function read(key, fallback = null) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
@@ -120,9 +121,11 @@ export default function useDiagramStore() {
   }, []);
 
   function addDoc(name = 'Untitled diagram', code = blankCode) {
-    if (!ready.current || deactivating) return;
+    if (!ready.current) throw new Error('The diagram library is still loading. Please try again in a moment.');
+    if (deactivating) throw new Error('Wait for the current diagram to finish deactivating, then try again.');
     const doc = makeDoc(name, code); mark(doc);
     setState(s => ({ ...s, docs: [...s.docs, doc], active: doc.id })); schedule();
+    return doc;
   }
   function updateDoc(values) {
     const current = stateRef.current;
