@@ -129,4 +129,17 @@ describe('Template insertion and autosave over HTTP', () => {
     await click('Use Incident response template');
     expect(host.querySelector('[aria-label="Test source"]').value).toContain('Monitoring alert');
   });
+  it('offers all diagram themes and defaults PNG background to the chosen palette', async () => {
+    await act(async () => root.render(<App/>));
+    const picker = host.querySelector('[aria-label="Diagram theme"]');
+    expect(picker.options).toHaveLength(12);
+    await act(async () => { picker.value = 'midnight'; picker.dispatchEvent(new Event('change', { bubbles: true })); });
+    expect(JSON.parse(localStorage.getItem('kshyst-mermaid-drafts-v1')).theme).toBe('midnight');
+    await click('Export');
+    const png = Array.from(host.querySelectorAll('.export-options button')).find(button => button.textContent.includes('PNG'));
+    await act(async () => png.click());
+    const background = host.querySelectorAll('.export-settings select')[1];
+    expect(background.value).toBe('theme');
+    expect(Array.from(background.options, option => option.value)).toEqual(['theme', '#ffffff', 'transparent', '#151619']);
+  });
 });

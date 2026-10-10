@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
 import { Minus, Plus, Maximize, Scan, AlertCircle, Check, LoaderCircle } from 'lucide-react';
+import { applySvgBackground, getDiagramTheme, mermaidThemeConfig } from './diagram-themes';
+import './diagram-themes.css';
 let renderCounter = 0;
 let renderQueue = Promise.resolve();
 export default function Preview({ code, theme, background, onSvg, refresh, live }) {
+  const palette = getDiagramTheme(theme);
   const [svg, setSvg] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const [zoom, setZoom] = useState(1), [pan, setPan] = useState({ x: 0, y: 0 });
   const frame = useRef(null), diagram = useRef(null), drag = useRef(null), callback = useRef(onSvg), last = useRef(null);
@@ -18,12 +21,13 @@ export default function Preview({ code, theme, background, onSvg, refresh, live 
       renderQueue = renderQueue.catch(() => {}).then(async () => {
         if (cancelled) return;
         try {
-          mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme, htmlLabels: false, fontFamily: 'Arial, sans-serif', flowchart: { htmlLabels: false }, sequence: { useMaxWidth: false } });
+          mermaid.initialize({ ...mermaidThemeConfig(theme), startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, htmlLabels: false, fontFamily: 'Arial, sans-serif', flowchart: { htmlLabels: false }, sequence: { useMaxWidth: false } });
           const result = await mermaid.render(`diagram-${++renderCounter}`, code || 'flowchart TD\n A[Start writing your diagram]');
           const parsed = new DOMParser().parseFromString(result.svg, 'image/svg+xml');
           const root = parsed.documentElement;
           const box = root.getAttribute('viewBox')?.split(/[ ,]+/).map(Number);
           if (box?.length === 4) { root.setAttribute('width', box[2]); root.setAttribute('height', box[3]); }
+          applySvgBackground(root, getDiagramTheme(theme).background);
           const rendered = new XMLSerializer().serializeToString(root);
           if (!cancelled) { setSvg(rendered); setError(''); callback.current(rendered); }
         } catch (err) {
@@ -49,7 +53,7 @@ export default function Preview({ code, theme, background, onSvg, refresh, live 
   const adjust = delta => setZoom(z => Math.min(5, Math.max(.1, z + delta)));
   return <section className="preview-pane">
     <div className="pane-header"><span><span className="status-dot"/> Live preview</span><span className="render-status">{busy ? <><LoaderCircle size={12} className="spin"/> Rendering</> : error ? <><AlertCircle size={12}/> Syntax error</> : <><Check size={12}/> Ready</>}</span></div>
-    <div ref={frame} className={`canvas ${background}`} onWheel={e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); adjust(e.deltaY > 0 ? -.1 : .1); } }} onPointerDown={e => { if (e.target.closest('button')) return; drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={e => { if (drag.current) setPan({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y }); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
+    <div ref={frame} className={`canvas ${background} ${palette.dark ? 'diagram-dark' : ''}`} style={{ backgroundColor: palette.background, '--diagram-grid': palette.grid }} onWheel={e => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); adjust(e.deltaY > 0 ? -.1 : .1); } }} onPointerDown={e => { if (e.target.closest('button')) return; drag.current = { x: e.clientX - pan.x, y: e.clientY - pan.y }; e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={e => { if (drag.current) setPan({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y }); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
       <div className="canvas-label">YOUR IDEAS, CONNECTED</div>
       <div ref={diagram} className="diagram" style={{ transform: `translate(${pan.x}px,${pan.y}px) scale(${zoom})` }} dangerouslySetInnerHTML={{ __html: svg }}/>
       {!svg && !error && <div className="empty-preview"><LoaderCircle className="spin"/> Bringing your diagram to life…</div>}

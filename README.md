@@ -4,6 +4,8 @@ A Mermaid editor with live preview, CodeMirror highlighting and completion, a SQ
 
 Explore templates supports independent text search and diagram-type filtering. Choosing a template opens its complete source in a new document and autosaves it; existing documents are preserved. This works on both the deployed HTTP address and HTTPS.
 
+The diagram theme picker offers twelve palettes: Default, Neutral, Forest, Ocean, Mint, Paper, Sunset, Lavender, Dark, Midnight, Nord, and Dracula. Each changes diagram colors and its canvas background. SVG exports retain the selected background; PNG defaults to the diagram theme and also offers white, dark and transparent backgrounds. Source-defined node styles and Mermaid theme directives can override palette colors.
+
 The shape picker beneath the source editor provides 20 searchable flowchart shapes. Place your cursor or select source text, then click a shape to insert its syntax. New nodes get an unused `nodeN` ID, and their label is selected for immediate editing. Undo reverses each insertion. The picker can be collapsed and is disabled for non-flowchart diagrams.
 
 ## Run with Docker
