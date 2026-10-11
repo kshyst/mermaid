@@ -2,7 +2,7 @@ services:
   mermaid-studio:
     build: .
     ports:
-      - "3010:80"
+      - "127.0.0.1:3010:80"
     restart: always
     depends_on:
       diagrams-api:
