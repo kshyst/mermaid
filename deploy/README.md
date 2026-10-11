@@ -16,9 +16,9 @@ Install the host configuration after obtaining the certificate:
 
 ```sh
 sudo install -d /var/www/letsencrypt
-sudo install -m 644 deploy/mermaid.nginx.conf /etc/nginx/sites-available/mermaid
+sudo install -m 644 deploy/mermaid.nginx.conf /etc/nginx/sites-enabled/mermaid
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot reconfigure --cert-name mermaid.kshyst.ir --webroot \
+sudo certbot reconfigure --cert-name mermaid.kshyst.ir --webroot --preferred-challenges http \
   --webroot-path /var/www/letsencrypt --deploy-hook "systemctl reload nginx" \
   --non-interactive
 sudo systemctl enable --now certbot.timer
