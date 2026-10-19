@@ -1,0 +1,163 @@
+name: Test and deploy Mermaid
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+        with:
+          version: v1.33.3
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: python -m pip install -r server/requirements.txt PyYAML==6.0.3
+      - run: python -m unittest discover -s server -p 'test_*.py' -v
+      - run: python -m unittest discover -s deploy -p 'test_*.py' -v
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    concurrency:
+      group: mermaid-production
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set image names
+        id: images
+        shell: bash
+        run: |
+          repository="${GITHUB_REPOSITORY,,}"
+          echo "web=ghcr.io/${repository}-web" >> "$GITHUB_OUTPUT"
+          echo "api=ghcr.io/${repository}-api" >> "$GITHUB_OUTPUT"
+      - name: Build and publish frontend
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images.outputs.web }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=mermaid-web
+          cache-to: type=gha,mode=max,scope=mermaid-web
+      - name: Build and publish API
+        id: api
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile.api
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images.outputs.api }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=mermaid-api
+          cache-to: type=gha,mode=max,scope=mermaid-api
+      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+        with:
+          version: v1.33.3
+      - name: Render immutable deployment
+        env:
+          WEB_IMAGE: ${{ steps.images.outputs.web }}@${{ steps.web.outputs.digest }}
+          API_IMAGE: ${{ steps.images.outputs.api }}@${{ steps.api.outputs.digest }}
+        shell: bash
+        run: |
+          sh deploy/render-release.sh "$WEB_IMAGE" "$API_IMAGE" > "$RUNNER_TEMP/manifests.yaml"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          release = {
+              'source_revision': os.environ['GITHUB_SHA'],
+              'web_image': os.environ['WEB_IMAGE'],
+              'api_image': os.environ['API_IMAGE'],
+              'workflow_run': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          Path(os.environ['RUNNER_TEMP'], 'release.json').write_text(json.dumps(release, indent=2) + '\n')
+          PY
+      - name: Publish tested GitOps snapshot
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep credentials out of URLs and Git configuration.
+          askpass="$RUNNER_TEMP/mermaid-git-askpass.sh"
+          cat > "$askpass" <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *) printf '%s\n' "$GH_TOKEN" ;;
+          esac
+          SH
+          chmod 700 "$askpass"
+          export GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0
+          trap 'rm -f "$askpass"' EXIT
+
+          release_repo="$RUNNER_TEMP/mermaid-gitops"
+          git init "$release_repo"
+          cd "$release_repo"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          branch_ref=$(git ls-remote --heads origin refs/heads/deploy/production)
+          if [ -n "$branch_ref" ]; then
+            git fetch --depth=1 origin deploy/production
+            git checkout -B deploy/production FETCH_HEAD
+          else
+            git checkout --orphan deploy/production
+          fi
+          cp "$RUNNER_TEMP/manifests.yaml" manifests.yaml
+          cp "$RUNNER_TEMP/release.json" release.json
+
+          # A newer main push may have arrived while these images built.
+          current_main=$(git ls-remote origin refs/heads/main | cut -f1)
+          if [ "$current_main" != "$GITHUB_SHA" ]; then
+            echo "A newer main revision exists; skipping this obsolete deployment."
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add manifests.yaml release.json
+          if git diff --cached --quiet; then
+            echo "Deployment already matches these images."
+            exit 0
+          fi
+          git commit -m "Deploy Mermaid ${GITHUB_SHA}"
+          git push origin HEAD:refs/heads/deploy/production
+          echo "Published deployment for ${GITHUB_SHA}" >> "$GITHUB_STEP_SUMMARY"

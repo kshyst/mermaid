@@ -10,6 +10,11 @@ The shape picker beneath the source editor provides 20 searchable flowchart shap
 
 ## Run with Docker
 
+For automatic production releases on K3s using GitHub Actions, GHCR and
+Argo CD, follow the [Kubernetes deployment guide](deploy/kubernetes/README.md).
+Pushes to `main` build tested images; Argo CD watches the generated
+`deploy/production` branch. The existing Docker Compose setup remains available.
+
 ```sh
 docker compose up -d --build
 ```
