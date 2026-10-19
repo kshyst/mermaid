@@ -1,0 +1,327 @@
+apiVersion: v1
+data:
+  default.conf: |
+    # Only Traefik pods can reach this frontend (see network-policy.yaml).
+    # Default K3s pod CIDR; update this if the cluster uses a custom pod CIDR.
+    set_real_ip_from 10.42.0.0/16;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    map $http_x_forwarded_proto $request_scheme {
+      default $scheme;
+      https https;
+    }
+
+    server {
+      listen 80;
+      server_name _;
+      root /usr/share/nginx/html;
+      index index.html;
+      client_max_body_size 8m;
+      location /api/ {
+        proxy_pass http://diagrams-api:8000;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto $request_scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+      }
+      location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+      }
+      location / { try_files $uri $uri/ /index.html; }
+      location /assets/ { expires 1y; add_header Cache-Control "private, immutable"; }
+      add_header X-Content-Type-Options nosniff;
+      add_header Referrer-Policy same-origin;
+    }
+kind: ConfigMap
+metadata:
+  name: mermaid-nginx-88kd789kcc
+  namespace: mermaid
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diagrams-api
+  namespace: mermaid
+spec:
+  ports:
+  - name: http
+    port: 8000
+    targetPort: http
+  selector:
+    app: diagrams-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mermaid-studio
+  namespace: mermaid
+spec:
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  selector:
+    app: mermaid-studio
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+  name: mermaid-data
+  namespace: mermaid
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diagrams-api
+  namespace: mermaid
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: diagrams-api
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: diagrams-api
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - env:
+        - name: DATABASE_PATH
+          value: /data/diagrams.sqlite3
+        - name: JWT_SECRET_PATH
+          value: /data/jwt-secret
+        - name: SECURE_COOKIES
+          value: "1"
+        - name: PYTHONDONTWRITEBYTECODE
+          value: "1"
+        image: ghcr.io/kshyst/mermaid-api@sha256:2d7851f8cb98fd73422b13fb884770d1e62e3e7005f4e4e85d281decf052994c
+        livenessProbe:
+          failureThreshold: 5
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 20
+          timeoutSeconds: 3
+        name: api
+        ports:
+        - containerPort: 8000
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 5
+          timeoutSeconds: 3
+        resources:
+          limits:
+            cpu: "1"
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 5
+        volumeMounts:
+        - mountPath: /data
+          name: data
+      nodeSelector:
+        kubernetes.io/hostname: control-1
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 10001
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: mermaid-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mermaid-studio
+  namespace: mermaid
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: mermaid-studio
+  template:
+    metadata:
+      labels:
+        app: mermaid-studio
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - image: ghcr.io/kshyst/mermaid-web@sha256:c0e1a4b892c8850c038c760105af3cb517e34ad8e2e53d6e5ba196b038d0c6d0
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 20
+        name: frontend
+        ports:
+        - containerPort: 80
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 5
+        volumeMounts:
+        - mountPath: /etc/nginx/conf.d/default.conf
+          name: nginx-config
+          readOnly: true
+          subPath: default.conf
+      nodeSelector:
+        kubernetes.io/hostname: control-1
+      volumes:
+      - configMap:
+          name: mermaid-nginx-88kd789kcc
+        name: nginx-config
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+  name: mermaid
+  namespace: mermaid
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: mermaid.kshyst.ir
+    http:
+      paths:
+      - backend:
+          service:
+            name: mermaid-studio
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - mermaid.kshyst.ir
+    secretName: mermaid-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.middlewares: mermaid-https-redirect@kubernetescrd
+  name: mermaid-http
+  namespace: mermaid
+spec:
+  ingressClassName: traefik
+  rules:
+  - host: mermaid.kshyst.ir
+    http:
+      paths:
+      - backend:
+          service:
+            name: mermaid-studio
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-from-frontend
+  namespace: mermaid
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: mermaid-studio
+    ports:
+    - port: 8000
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: diagrams-api
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-from-traefik
+  namespace: mermaid
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    ports:
+    - port: 80
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: mermaid-studio
+  policyTypes:
+  - Ingress
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: https-redirect
+  namespace: mermaid
+spec:
+  redirectScheme:
+    permanent: true
+    scheme: https

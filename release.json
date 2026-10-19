@@ -1,0 +1,6 @@
+{
+  "source_revision": "deb2b6953769700e615137fcbb69de09184a0b0a",
+  "web_image": "ghcr.io/kshyst/mermaid-web@sha256:c0e1a4b892c8850c038c760105af3cb517e34ad8e2e53d6e5ba196b038d0c6d0",
+  "api_image": "ghcr.io/kshyst/mermaid-api@sha256:2d7851f8cb98fd73422b13fb884770d1e62e3e7005f4e4e85d281decf052994c",
+  "workflow_run": "https://github.com/kshyst/mermaid/actions/runs/39203565306"
+}
